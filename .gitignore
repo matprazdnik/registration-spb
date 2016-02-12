@@ -1,0 +1,8 @@
+*~
+config.py
+*.pdf
+*.log
+__pycache__
+mf.pid
+mysql
+nohup.out
