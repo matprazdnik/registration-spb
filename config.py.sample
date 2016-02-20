@@ -1,0 +1,12 @@
+base_url = 'http://spbtc.ru/matprazdnik'
+
+config = {
+  'db': { 'host': '127.0.0.1', 'user': 'mf', 'db': 'mf', 'passwd': '12345' },
+  'web': { 'host': '127.0.0.1', 'port': 5000, 'debug': True }
+}
+
+vk_app_id = '12345'
+vk_client_secret = 'secret'
+auth_salt = 'hfow8r234h28'
+
+admin_ids = ['vk:12345']
