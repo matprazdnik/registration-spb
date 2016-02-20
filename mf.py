@@ -147,9 +147,17 @@ def admin():
     if not user_id in config.admin_ids:
         content = '<div>' + lang.lang['admin_not_enough_rights'] + '</div><div><a href="' + config.base_url + '/auth/vk_start">' + lang.lang['admin_login'] + '</a></div></div>\n'
         return render_template('template.html', title=lang.lang['admin_title'], content=content)
+    try:
+        mode = request.args.get('mode', '')
+    except:
+        mode = ''
+    try:
+        order = request.args.get('order', 'id')
+    except:
+        order = 'id'
     conn, cur = db.mysql_init()
-    fields = ['id', 'first_name', 'last_name', 'grade', 'school', 'school2', 'reg_date']
-    cur.execute('select ' + ', '.join(fields) + ' from users where id > 22 order by id')
+    fields = ['id', 'first_name', 'last_name', 'grade', 'grade2', 'school', 'school2', 'reg_date', 'work', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'res']
+    cur.execute('select ' + ', '.join(fields) + ' from users where id > 22 order by ' + order)
     content = ''
     users = []
     for u in cur.fetchall():
@@ -160,7 +168,9 @@ def admin():
             i += 1
         user['reg_date'] = time.strftime('%b %d %H:%M:%S', time.localtime(int(user['reg_date'])))
         users.append(user)
-    show_fields = fields + ['title', 'edit']
+    show_fields = fields[::]
+    if mode != 'add':
+        show_fields.append('title')
     names = {6: {}, 7: {}}
     for u in users:
         name = u['first_name'] + ' ' + u['last_name']
@@ -168,12 +178,54 @@ def admin():
         user_hash = get_user_hash(u['id'])
         link_title = config.base_url + '/static/title' + str(user_hash) + '.pdf'
         u['link_title'] = '<a href="' + cgi.escape(link_title) + '">титул</a>'
-        link_edit = config.base_url + '/admin/edit' + str(u['id'])
-        u['link_edit'] = '<a href="' + cgi.escape(link_edit) + '">редактировать</a>'
-        text = ''.join(['<td>' + cgi.escape(str(u[f])) + '</td>' for f in fields])
-        text += '<td>' + u['link_title'] + '</td>'
-        text += '<td>' + u['link_edit'] + '</td>'
-        u['text'] = '<tr>' + text + '</tr>'
+        text = ''
+        if mode == 'edit':
+            for f in fields:
+                ustr = ''
+                if f in ['id', 'reg_date']:
+                    ustr += cgi.escape(str(u[f]))
+                else:
+                    style = ''
+                    if f in ['grade', 'grade2']:
+                        style = 'style="width: 30px;"'
+                    elif f in ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'res']:
+                        style = 'style="width: 20px;"'
+                    ustr += '<input type="text" ' + style \
+                        + 'id="u_' + str(u['id']) + '_' + f + '"' \
+                        + 'value="' + cgi.escape(str(u[f])) + '"' \
+                        + 'onkeydown="pressed(' + str(u['id']) + ", '" + f + "');" + '" />'
+                text += '<td>' + ustr + '</td>'
+            text += '<td>' + u['link_title'] + '</td>'
+        elif mode == 'add':
+            for f in fields:
+                ustr = ''
+                if not f in ['work']:
+                    ustr += cgi.escape(str(u[f]))
+                else:
+                    ustr += '<input type="text" ' \
+                        + 'id="u_' + str(u['id']) + '_' + f + '"' \
+                        + 'value="' + cgi.escape(str(u[f])) + '"' \
+                        + 'onkeydown="pressed(' + str(u['id']) + ", '" + f + "');" + '" />'
+                text += '<td>' + ustr + '</td>'
+        elif mode == 'res':
+            for f in fields:
+                ustr = ''
+                if not f in ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'res']:
+                    ustr += cgi.escape(str(u[f]))
+                else:
+                    style = ''
+                    if f in ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'res']:
+                        style = 'style="width: 20px;"'
+                    ustr += '<input type="text" ' + style \
+                        + 'id="u_' + str(u['id']) + '_' + f + '"' \
+                        + 'value="' + cgi.escape(str(u[f])) + '"' \
+                        + 'onkeydown="pressed(' + str(u['id']) + ", '" + f + "');" + '" />'
+                text += '<td>' + ustr + '</td>'
+        else:
+            text += ''.join(['<td>' + cgi.escape(str(u[f])) + '</td>' for f in fields])
+            text += '<td>' + u['link_title'] + '</td>'
+
+        u['text'] = '<tr>' + text + '</tr>\n'
         if not name in names[grade]:
             names[grade][name] = True
     content += '<table>\n' + '<tr>' + ''.join(['<th>' + f + '</th>' for f in show_fields]) + '</th>'
@@ -182,6 +234,23 @@ def admin():
     for g in [6, 7]:
         content += '<div>' + str(len(names[g])) + ' различных имен-фамилий в ' + str(g) + ' классе</div>'
     content += '<div>' + str(len(names[6]) + len(names[7])) + ' различных имен-фамилий всего</div>'
+    db.mysql_close(conn, cur)
+    return render_template('template.html', title=lang.lang['admin_title'], content=content)
+
+@mf.route('/admin/schools')
+def admin_schools():
+    user_id = check_auth()
+    if not user_id in config.admin_ids:
+        content = '<div>' + lang.lang['admin_not_enough_rights'] + '</div><div><a href="' + config.base_url + '/auth/vk_start">' + lang.lang['admin_login'] + '</a></div></div>\n'
+        return render_template('template.html', title=lang.lang['admin_title'], content=content)
+    conn, cur = db.mysql_init()
+    cur.execute('select school, count(*) as cnt from users where id>22 group by school order by cnt')
+    users = []
+    for r in cur.fetchall():
+        u = {'school': r[0], 'count': int(r[1])}
+        users.append(u)
+    content = ''
+    content += '<table>\n' + ''.join(['<tr><td>' + u['school'] + '</td><td>' + str(u['count']) + '</td></tr>\n' for u in users]) + '</table>\n'
     db.mysql_close(conn, cur)
     return render_template('template.html', title=lang.lang['admin_title'], content=content)
 
@@ -213,6 +282,26 @@ def stats_reg():
         line_chart.add(str(g), regsc[g])
     db.mysql_close(conn, cur)
     return line_chart.render()
+
+@mf.route('/admin/do_edit')
+def admin_do_edit():
+    user_id = check_auth()
+    if not user_id in config.admin_ids:
+        return lang.lang['admin_not_enough_rights']
+    try:
+        user_id = int(request.args.get('id', '0'))
+        field = request.args.get('f', '')
+        value = request.args.get('v', '')
+    except:
+        return redirect(config.base_url)
+    if not field in ['first_name', 'last_name', 'grade', 'grade2', 'school', 'school2', 'work'] \
+        + ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6']:
+        return 'error1'
+    conn, cur = db.mysql_init()
+    cur.execute('update users set ' + field + '=%s, res=r0+r1+r2+r3+r4+r5+r6 where id=%s', [value, str(user_id)])
+    conn.commit()
+    db.mysql_close(conn, cur)
+    return str(user_id) + '.' + field + '=' + value
 
 if __name__ == '__main__':
     webc = config.config['web']
