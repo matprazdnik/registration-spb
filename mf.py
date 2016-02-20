@@ -145,10 +145,10 @@ def vk_done():
 def admin():
     user_id = check_auth()
     if not user_id in config.admin_ids:
-        content = '<div>Ты недостаточно прав.</div><div><a href="' + config.base_url + '/auth/vk_start">Войти</a></div></div>\n'
-        return render_template('template.html', title='Недостаточно прав', content=content)
+        content = '<div>' + lang.lang['admin_not_enough_rights'] + '</div><div><a href="' + config.base_url + '/auth/vk_start">' + lang.lang['admin_login'] + '</a></div></div>\n'
+        return render_template('template.html', title=lang.lang['admin_title'], content=content)
     conn, cur = db.mysql_init()
-    fields = ['id', 'first_name', 'last_name', 'grade', 'school', 'email', 'reg_date']
+    fields = ['id', 'first_name', 'last_name', 'grade', 'school', 'school2', 'reg_date']
     cur.execute('select ' + ', '.join(fields) + ' from users where id > 22 order by id')
     content = ''
     users = []
@@ -160,6 +160,7 @@ def admin():
             i += 1
         user['reg_date'] = time.strftime('%b %d %H:%M:%S', time.localtime(int(user['reg_date'])))
         users.append(user)
+    show_fields = fields + ['title', 'edit']
     names = {6: {}, 7: {}}
     for u in users:
         name = u['first_name'] + ' ' + u['last_name']
@@ -167,10 +168,16 @@ def admin():
         user_hash = get_user_hash(u['id'])
         link_title = config.base_url + '/static/title' + str(user_hash) + '.pdf'
         u['link_title'] = '<a href="' + cgi.escape(link_title) + '">титул</a>'
+        link_edit = config.base_url + '/admin/edit' + str(u['id'])
+        u['link_edit'] = '<a href="' + cgi.escape(link_edit) + '">редактировать</a>'
+        text = ''.join(['<td>' + cgi.escape(str(u[f])) + '</td>' for f in fields])
+        text += '<td>' + u['link_title'] + '</td>'
+        text += '<td>' + u['link_edit'] + '</td>'
+        u['text'] = '<tr>' + text + '</tr>'
         if not name in names[grade]:
             names[grade][name] = True
-    content += '<table>\n' + '<tr>' + ''.join(['<th>' + f + '</th>' for f in fields]) + '</th>'
-    content += '\n'.join(['<tr>' + ''.join(['<td>' + cgi.escape(str(u[f])) + '</td>' for f in fields]) + '<td>' + u['link_title'] + '</td>' + '</tr>\n' for u in users])
+    content += '<table>\n' + '<tr>' + ''.join(['<th>' + f + '</th>' for f in show_fields]) + '</th>'
+    content += ''.join([u['text'] for u in users])
     content += '</table>\n'
     for g in [6, 7]:
         content += '<div>' + str(len(names[g])) + ' различных имен-фамилий в ' + str(g) + ' классе</div>'
@@ -180,6 +187,10 @@ def admin():
 
 @mf.route('/admin/stats/reg')
 def stats_reg():
+    user_id = check_auth()
+    if not user_id in config.admin_ids:
+        content = '<div>' + lang.lang['admin_not_enough_rights'] + '</div><div><a href="' + config.base_url + '/auth/vk_start">' + lang.lang['admin_login'] + '</a></div></div>\n'
+        return render_template('template.html', title=lang.lang['admin_title'], content=content)
     conn, cur = db.mysql_init()
     fields = ['id', 'first_name', 'last_name', 'grade', 'school', 'email', 'reg_date']
     line_chart = pygal.Bar()

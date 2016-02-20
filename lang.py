@@ -25,6 +25,8 @@ lang_ru = {
     'reg_done': 'Регистрация успешна!',
 
     'admin_title': 'Администрирование',
+    'admin_not_enough_rights': 'Ты недостаточно прав.',
+    'admin_login': 'Войти',
 
     '': ''
 }
