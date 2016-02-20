@@ -6,6 +6,7 @@ import random
 import string
 import urllib
 import json
+import pygal
 
 import lang
 import config
@@ -148,7 +149,7 @@ def admin():
         return render_template('template.html', title='Недостаточно прав', content=content)
     conn, cur = db.mysql_init()
     fields = ['id', 'first_name', 'last_name', 'grade', 'school', 'email', 'reg_date']
-    cur.execute('select ' + ', '.join(fields) + ' from users where id > 22 order by grade, id')
+    cur.execute('select ' + ', '.join(fields) + ' from users where id > 22 order by id')
     content = ''
     users = []
     for u in cur.fetchall():
@@ -163,16 +164,44 @@ def admin():
     for u in users:
         name = u['first_name'] + ' ' + u['last_name']
         grade = int(u['grade'])
+        user_hash = get_user_hash(u['id'])
+        link_title = config.base_url + '/static/title' + str(user_hash) + '.pdf'
+        u['link_title'] = '<a href="' + cgi.escape(link_title) + '">титул</a>'
         if not name in names[grade]:
             names[grade][name] = True
     content += '<table>\n' + '<tr>' + ''.join(['<th>' + f + '</th>' for f in fields]) + '</th>'
-    content += '\n'.join(['<tr>' + ''.join(['<td>' + cgi.escape(str(u[f])) + '</td>' for f in fields]) + '</tr>\n' for u in users])
+    content += '\n'.join(['<tr>' + ''.join(['<td>' + cgi.escape(str(u[f])) + '</td>' for f in fields]) + '<td>' + u['link_title'] + '</td>' + '</tr>\n' for u in users])
     content += '</table>\n'
     for g in [6, 7]:
         content += '<div>' + str(len(names[g])) + ' различных имен-фамилий в ' + str(g) + ' классе</div>'
     content += '<div>' + str(len(names[6]) + len(names[7])) + ' различных имен-фамилий всего</div>'
     db.mysql_close(conn, cur)
     return render_template('template.html', title=lang.lang['admin_title'], content=content)
+
+@mf.route('/admin/stats/reg')
+def stats_reg():
+    conn, cur = db.mysql_init()
+    fields = ['id', 'first_name', 'last_name', 'grade', 'school', 'email', 'reg_date']
+    line_chart = pygal.Bar()
+    line_chart.title = 'Registration stats'
+    min_h = 10**10
+    max_h = -10**10
+    regs = {6: [], 7: []}
+    cur.execute('select grade, reg_date from users where id > 22')
+    for u in cur.fetchall():
+        g, d = int(u[0]), u[1] // 3600
+        regs[g].append(d)
+        min_h = min(min_h, d)
+        max_h = max(max_h, d)
+    regsc = {6: [0 for x in range(max_h - min_h + 1)], 7: [0 for x in range(max_h - min_h + 1)]}
+    for g in [6, 7]:
+        for h in regs[g]:
+            regsc[g][h - min_h] += 1
+    line_chart.x_labels = [str((h + 3) % 24) for h in range(min_h, max_h + 1)]
+    for g in [6, 7]:
+        line_chart.add(str(g), regsc[g])
+    db.mysql_close(conn, cur)
+    return line_chart.render()
 
 if __name__ == '__main__':
     webc = config.config['web']
