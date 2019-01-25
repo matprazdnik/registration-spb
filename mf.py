@@ -88,7 +88,7 @@ def reg():
             user_id = do_reg(data)
             content += '<div>' + lang.lang['reg_done'] + '</div>\n'
             user_hash = get_user_hash(user_id)
-            link = config.base_url + '/static/title' + str(user_hash) + '.pdf'
+            link = config.base_url + '/static/title' + str(user_hash) + '.ps'
             content += '<div>Ваш титульный лист будет доступен по ссылке: <a href="' + link + '">' \
                 + link + '</a>. Пожалуйста, распечатайте его и принесите с собой на Матпраздник.</div>\n'
         else:
@@ -141,6 +141,36 @@ def vk_done():
     resp.set_cookie('mf_user_id', user_id)
     return resp
 
+@mf.route('/results')
+def results():
+    conn, cur = db.mysql_init()
+    content = ''
+    fields = ['first_name', 'last_name', 'grade2', 'school', 'diplom']
+    for g in [6, 7]:
+        cur.execute('select ' + ', '.join(fields) + ' from users where grade=' + str(g) + ' and diplom!=' + "''" + ' order by res desc')
+        users = []
+        for u in cur.fetchall():
+            i = 0
+            user = {}
+            for f in fields:
+                user[f] = u[i]
+                i += 1
+            users.append(user)
+        for u in users:
+            name = u['first_name'] + ' ' + u['last_name']
+            text = ''
+            for f in fields:
+                ustr = cgi.escape(str(u[f]))
+                text += '<td>' + ustr + '</td>'
+            u['text'] = '<tr>' + text + '</tr>'
+        content += '<h2>' + str(g) + ' класс</h2>\n'
+        content += '<table>\n' + '<tr>' + ''.join(['<th>' + f + '</th>' for f in ['Имя', 'Фамилия', 'Класс', 'Школа', 'Диплом']]) + '</th>'
+        content += ''.join([u['text'] for u in users])
+        content += '</table>\n'
+    content += '<div>Все вопросы, связанные с получением дипломов можно писать на адрес <b>math.fest.spb@gmail.com</b>.</div>'
+    db.mysql_close(conn, cur)
+    return render_template('template.html', title=lang.lang['index_title'], content=content)
+
 @mf.route('/admin')
 def admin():
     user_id = check_auth()
@@ -155,9 +185,19 @@ def admin():
         order = request.args.get('order', 'id')
     except:
         order = 'id'
+    try:
+        rev = request.args.get('rev', '')
+    except:
+        rev = ''
+    try:
+        wonly = bool(request.args.get('wonly', 'False'))
+        if wonly:
+            wonly = " and work != ''"
+    except:
+        wonly = ''
     conn, cur = db.mysql_init()
     fields = ['id', 'first_name', 'last_name', 'grade', 'grade2', 'school', 'school2', 'reg_date', 'work', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'res']
-    cur.execute('select ' + ', '.join(fields) + ' from users where id > 22 order by ' + order)
+    cur.execute('select ' + ', '.join(fields) + ' from users where id > 22' + wonly + ' order by ' + order + ' ' + rev)
     content = ''
     users = []
     for u in cur.fetchall():
@@ -169,15 +209,20 @@ def admin():
         user['reg_date'] = time.strftime('%b %d %H:%M:%S', time.localtime(int(user['reg_date'])))
         users.append(user)
     show_fields = fields[::]
-    if mode != 'add':
+    if not mode in ['add', 'res']:
         show_fields.append('title')
+        show_fields.append('diploma')
     names = {6: {}, 7: {}}
+    works = {6: 0, 7: 0}
+    have_res = {6: 0, 7: 0}
     for u in users:
         name = u['first_name'] + ' ' + u['last_name']
         grade = int(u['grade'])
         user_hash = get_user_hash(u['id'])
         link_title = config.base_url + '/static/title' + str(user_hash) + '.pdf'
         u['link_title'] = '<a href="' + cgi.escape(link_title) + '">титул</a>'
+        link_diploma = config.base_url + '/static/diploma' + str(u['id']) + '.pdf'
+        u['link_diploma'] = '<a href="' + cgi.escape(link_diploma) + '">диплом</a>'
         text = ''
         if mode == 'edit':
             for f in fields:
@@ -191,11 +236,12 @@ def admin():
                     elif f in ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'res']:
                         style = 'style="width: 20px;"'
                     ustr += '<input type="text" ' + style \
-                        + 'id="u_' + str(u['id']) + '_' + f + '"' \
-                        + 'value="' + cgi.escape(str(u[f])) + '"' \
+                        + 'id="u_' + str(u['id']) + '_' + f + '" ' \
+                        + 'value="' + cgi.escape(str(u[f])) + '" ' \
                         + 'onkeydown="pressed(' + str(u['id']) + ", '" + f + "');" + '" />'
                 text += '<td>' + ustr + '</td>'
             text += '<td>' + u['link_title'] + '</td>'
+            text += '<td>' + u['link_diploma'] + '</td>'
         elif mode == 'add':
             for f in fields:
                 ustr = ''
@@ -203,8 +249,8 @@ def admin():
                     ustr += cgi.escape(str(u[f]))
                 else:
                     ustr += '<input type="text" ' \
-                        + 'id="u_' + str(u['id']) + '_' + f + '"' \
-                        + 'value="' + cgi.escape(str(u[f])) + '"' \
+                        + 'id="u_' + str(u['id']) + '_' + f + '" ' \
+                        + 'value="' + cgi.escape(str(u[f])) + '" ' \
                         + 'onkeydown="pressed(' + str(u['id']) + ", '" + f + "');" + '" />'
                 text += '<td>' + ustr + '</td>'
         elif mode == 'res':
@@ -217,23 +263,34 @@ def admin():
                     if f in ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'res']:
                         style = 'style="width: 20px;"'
                     ustr += '<input type="text" ' + style \
-                        + 'id="u_' + str(u['id']) + '_' + f + '"' \
-                        + 'value="' + cgi.escape(str(u[f])) + '"' \
+                        + 'id="u_' + str(u['id']) + '_' + f + '" ' \
+                        + 'value="' + cgi.escape(str(u[f])) + '" ' \
                         + 'onkeydown="pressed(' + str(u['id']) + ", '" + f + "');" + '" />'
                 text += '<td>' + ustr + '</td>'
         else:
             text += ''.join(['<td>' + cgi.escape(str(u[f])) + '</td>' for f in fields])
             text += '<td>' + u['link_title'] + '</td>'
+            text += '<td>' + u['link_diploma'] + '</td>'
 
         u['text'] = '<tr>' + text + '</tr>\n'
         if not name in names[grade]:
             names[grade][name] = True
+        if u['work'] != '':
+            works[grade] += 1
+        if u['res'] != -1:
+            have_res[grade] += 1
     content += '<table>\n' + '<tr>' + ''.join(['<th>' + f + '</th>' for f in show_fields]) + '</th>'
     content += ''.join([u['text'] for u in users])
     content += '</table>\n'
     for g in [6, 7]:
         content += '<div>' + str(len(names[g])) + ' различных имен-фамилий в ' + str(g) + ' классе</div>'
     content += '<div>' + str(len(names[6]) + len(names[7])) + ' различных имен-фамилий всего</div>'
+    for g in [6, 7]:
+        content += '<div>' + str(works[g]) + ' сданных титулов в ' + str(g) + ' классе</div>'
+    content += '<div>' + str(works[6] + works[7]) + ' сданных титулов всего</div>'
+    for g in [6, 7]:
+        content += '<div>' + str(have_res[g]) + ' вбито результатов в ' + str(g) + ' классе</div>'
+    content += '<div>' + str(have_res[6] + have_res[7]) + ' вбито результатов всего</div>'
     db.mysql_close(conn, cur)
     return render_template('template.html', title=lang.lang['admin_title'], content=content)
 
@@ -298,7 +355,7 @@ def admin_do_edit():
         + ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6']:
         return 'error1'
     conn, cur = db.mysql_init()
-    cur.execute('update users set ' + field + '=%s, res=r0+r1+r2+r3+r4+r5+r6 where id=%s', [value, str(user_id)])
+    cur.execute('update users set ' + field + '=%s, state=0, state2=0, res=r0+r1+r2+r3+r4+r5+r6 where id=%s', [value, str(user_id)])
     conn.commit()
     db.mysql_close(conn, cur)
     return str(user_id) + '.' + field + '=' + value

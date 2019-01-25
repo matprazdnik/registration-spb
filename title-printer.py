@@ -77,8 +77,10 @@ for e in cur.fetchall():
     tex.close()
   
     call(['pdflatex', file_name + '.tex'])
+    call(['pdf2ps', file_name + '.pdf'])
   
     call(['mv', '-f', file_name + '.pdf', 'static/'])
+    call(['mv', '-f', file_name + '.ps', 'static/'])
     call(['rm', '-f', file_name + '.aux', file_name + '.log', file_name + '.tex'])
 
 db.mysql_close(conn, cur)

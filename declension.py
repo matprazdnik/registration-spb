@@ -9,7 +9,7 @@ while True:
     u = {}
     for r in cur.fetchall():
         u['id'], u['school'] = r[0], r[1]
-    if not id in u:
+    if not 'id' in u:
         break
     try:
         sn = int(u['school'])
@@ -18,7 +18,7 @@ while True:
     res = ''
     if sn != False:
         res = 'школы ' + u['school']
-    elif u['school'] in ['ГФМЛ 30', 'ПФМЛ 239', 'ФМЛ 366', 'ЛНМО', 'ЦИВ', 'ЧОУ Шостаковичей']:
+    elif u['school'] in ['ГФМЛ 30', 'ПФМЛ 239', 'ФМЛ 366', 'ЛНМО', 'ЦИВ', 'ЧОУ Шостаковичей', 'ФМЛ']:
         res = u['school']
     elif u['school'].split()[0] == 'гимназия':
         res = 'гимназии ' + u['school'].split()[1]
